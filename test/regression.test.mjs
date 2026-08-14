@@ -25,6 +25,7 @@
  *   ⑤ 参数校验：空 topic / depth>3 抛错；questions 解析为数组透传；
  *      models / maxParallel 默认值透传；maxTotalAgents null 不写入请求
  *   ⑥ 队列语义：子问题超过 maxParallel 时跨轮续研，绝不静默丢弃
+ *   ⑦ 可选 workflows：无 provider 的 profile 照常加载；工具调用时报明确错误
  */
 
 import assert from 'node:assert/strict'
@@ -502,7 +503,7 @@ test('④ 工具注册与输出 schema 编译通过', async () => {
   const def = defs[0]
   assert.strictEqual(def.name, 'deep_research')
   assert.strictEqual(mod.name, 'dsh-deep-research')
-  assert.deepEqual(plain(mod.inject), ['tools', 'workflows'], 'inject 声明 tools + workflows')
+  assert.deepEqual(plain(mod.inject), ['tools'], 'inject 只声明 tools（workflows 为可选运行时能力，不再 inject——否则无 provider 的 profile 会挂死启动）')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.output.schema), 'output.schema 应在引擎受支持子集内')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.parameters), 'parameters 应编译为受支持的对象 schema')
   const valid = { ok: true, report: '# r', review: '审阅' }
@@ -602,4 +603,25 @@ test('⑥ 子问题超过 maxParallel：剩余问题进入下一轮，全部被�
     '研究1·第2轮', '研究2·第2轮',
     '研究1·第3轮', '研究2·第3轮',
   ], '两两分轮，轮次递增')
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// ⑦ 无 workflows provider 的 profile（如标准 web 组合）：插件照常加载，
+//    工具调用时报明确错误，而不是 inject 未满足 → Loader EntryGroup 永久
+//    pending → 整棵插件树挂死 → 进程启动约 40s 后静默退出（exit 0）。
+// ════════════════════════════════════════════════════════════════════════════
+test('⑦ 无 workflows provider：apply 正常注册，execute 报明确错误', async () => {
+  const { mod } = await loadPlugin()
+  const defs = []
+  // 刻意不含 workflows 服务（标准 web profile 的服务集合）
+  const ctx = { tools: { register: (def) => defs.push(def) } }
+  assert.doesNotThrow(() => mod.apply(ctx, {}), '无 workflows 服务时 apply 应照常注册工具（启动不挂死）')
+  assert.strictEqual(defs.length, 1)
+  assert.strictEqual(defs[0].name, 'deep_research')
+  const exec = { agent: { id: 'parent' }, signal: new EventTarget() }
+  await assert.rejects(
+    defs[0].execute({ topic: 'T' }, exec),
+    /workflows service is unavailable .*workflow engine provider/s,
+    '调用时应给出指向 workflow 引擎缺失的明确错误',
+  )
 })
