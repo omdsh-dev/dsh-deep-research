@@ -66,8 +66,16 @@ import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'
 
 export const name = 'dsh-deep-research'
 
-/** Activate once the tool registry and the official workflow service are available. */
-export const inject = ['tools', 'workflows']
+/**
+ * Activate once the tool registry is available. The workflow service is an
+ * OPTIONAL runtime capability and is deliberately NOT injected: in profiles
+ * without a `workflows` provider (e.g. the stock web composition) an
+ * unsatisfied inject leaves this entry pending forever, which parks the
+ * loader's EntryGroup (Promise.allSettled) and silently kills the whole dsh
+ * process ~40s after startup. Availability is guarded at tool-call time
+ * instead (see `execute`).
+ */
+export const inject = ['tools']
 
 /** Plugin config (all optional). */
 export interface Config {
@@ -460,6 +468,17 @@ export function apply(ctx: Context, config: Config = {}) {
       if (!parent) {
         throw new Error('deep_research requires a calling agent (exec.agent was undefined)')
       }
+      // Runtime guard instead of an inject: keep profiles without a workflow
+      // engine loadable (see the `inject` note above).
+      const workflows: Context['workflows'] | undefined = ctx.get('workflows')
+      if (workflows === undefined) {
+        throw new Error(
+          'dsh-deep-research: the workflows service is unavailable in this profile '
+          + '(no workflow engine provider). deep_research needs DSH\'s official workflow '
+          + 'engine: use a profile/composition that provides it (e.g. tui/headless) '
+          + 'or register a workflows provider first.',
+        )
+      }
 
       const topic = String(args.topic).trim()
       if (topic.length === 0) throw new Error('deep_research: topic must not be empty')
@@ -480,7 +499,7 @@ export function apply(ctx: Context, config: Config = {}) {
       if (synthesizerModel !== undefined) models.synthesizer = synthesizerModel
       if (reviewerModel !== undefined) models.reviewer = reviewerModel
 
-      const run = ctx.workflows.start({
+      const run = workflows.start({
         script: SCRIPT,
         meta: {
           name: 'deep-research',

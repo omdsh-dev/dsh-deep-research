@@ -68,8 +68,8 @@ dsh --profile <profile>        # 重启生效：工具 deep_research 随 profile
 **成本建议**：模型分层——规划/综合用强模型、研究用便宜模型（配置
 `plannerModel`/`researcherModel`/`synthesizerModel`/`reviewerModel`），可显著降本。
 
-**依赖要求**：profile 的组合必须包含官方 workflow 引擎与内置 web 工具——`dsh` 官方
-base 组合自带，无需额外安装；peer 依赖（`@deepseek-ai/dsh-tools` 等）由组合提供，
+**依赖要求**：启动只需 `tools` 服务；`deep_research` 被**调用**时才需要官方 workflow 引擎
+与内置 web 工具（见下节 Profile 兼容性）。peer 依赖（`@deepseek-ai/dsh-tools` 等）由组合提供，
 profile 的 `autoInstallPeers: false` 可避免向 registry 查找未发布的 `@deepseek-ai/*`。
 
 **更新 / 卸载**：
@@ -116,8 +116,15 @@ dsh plugin --profile <profile> remove @dsh-external/dsh-deep-research
 
 ## Profile 兼容性
 
-本插件运行时依赖 DSH 官方 workflow 引擎（`ctx.workflows`，peer：`@deepseek-ai/dsh-workflow`）。
-请把它安装进**提供 workflows provider 的 Profile**（如 tui/headless 组合）；若 Profile 未声明
-该 provider（如部分 Web Profile 组合），Loader 会保持 pending——此时请先在 DSH Hub 登记
-workflows provider 关系或改用提供该服务的组合。编译产物（`lib/types/index.js`）为官方
-0810 生产入口，Node 原生可加载。
+本插件的编排能力运行在 DSH 官方 workflow 引擎上（`ctx.workflows`，peer：
+`@deepseek-ai/dsh-workflow`），但插件只 inject `tools`——workflow 引擎是**运行时按需能力**：
+装进任何 profile 都能正常启动。在未提供 workflows provider 的 profile（如标准 web 组合）中，
+插件照常加载、`deep_research` 工具照常注册，仅当模型真正调用该工具时才返回明确的
+"workflows service is unavailable" 错误（提示换用提供引擎的组合）。
+
+> 不要把 `workflows` 加回 inject：无 provider 的 profile 会因 inject 未满足使 Loader 的
+> EntryGroup 永久 pending，挂死整棵插件树，进程在启动约 40 秒后**静默退出（exit 0）**且无任何
+> 错误输出。要获得完整研究能力，请把插件装进提供 workflows provider 的组合（如
+> tui/headless）。
+
+编译产物（`lib/types/index.js`）为官方 0810 生产入口，Node 原生可加载。
