@@ -470,7 +470,7 @@ export function apply(ctx: Context, config: Config = {}) {
       }
       // Runtime guard instead of an inject: keep profiles without a workflow
       // engine loadable (see the `inject` note above).
-      const workflows: Context['workflows'] | undefined = ctx.workflows
+      const workflows: Context['workflows'] | undefined = ctx.get('workflows')
       if (workflows === undefined) {
         throw new Error(
           'dsh-deep-research: the workflows service is unavailable in this profile '

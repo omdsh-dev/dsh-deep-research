@@ -489,6 +489,8 @@ function stubContext(value) {
       },
     },
   }
+  // 模拟 cordis 宽松读取：ctx.get(name) 不做 inject 检查
+  ctx.get = (name) => ctx[name]
   return { ctx, defs, requests }
 }
 
@@ -614,7 +616,7 @@ test('⑦ 无 workflows provider：apply 正常注册，execute 报明确错误'
   const { mod } = await loadPlugin()
   const defs = []
   // 刻意不含 workflows 服务（标准 web profile 的服务集合）
-  const ctx = { tools: { register: (def) => defs.push(def) } }
+  const ctx = { tools: { register: (def) => defs.push(def) }, get: () => undefined }
   assert.doesNotThrow(() => mod.apply(ctx, {}), '无 workflows 服务时 apply 应照常注册工具（启动不挂死）')
   assert.strictEqual(defs.length, 1)
   assert.strictEqual(defs[0].name, 'deep_research')
