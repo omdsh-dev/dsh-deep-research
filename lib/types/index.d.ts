@@ -60,7 +60,11 @@
  */
 import type { Context } from 'cordis';
 export declare const name = "dsh-deep-research";
-/** Activate once the tool registry and the official workflow service are available. */
+/**
+ * Activate once the tool registry is available. The workflow service is an
+ * OPTIONAL runtime capability and is deliberately NOT injected (see src/index.ts
+ * for the full rationale); availability is guarded at tool-call time instead.
+ */
 export declare const inject: string[];
 /** Plugin config (all optional). */
 export interface Config {
