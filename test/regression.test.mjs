@@ -22,8 +22,8 @@
  *   ② 自适应闭环：high-priority 缺口自动派发第 2 轮补充研究
  *   ③ 规划路径：无 questions 时先规划，盲区假设进入侦察队列
  *   ④ 工具注册：deep_research 注册、输出 schema 在引擎受支持子集内
- *   ⑤ 参数校验：空 topic / depth>3 抛错；questions 解析为数组透传；
- *      models / maxParallel 默认值透传；maxTotalAgents null 不写入请求
+ *   ⑤ 参数校验：空 topic / depth>3 抛错；从调用 Agent 作用域取 workflowEngine；
+ *      questions / models / maxParallel 透传；maxTotalAgents null 不写入请求
  *   ⑥ 队列语义：子问题超过 maxParallel 时跨轮续研，绝不静默丢弃
  */
 
@@ -470,13 +470,14 @@ function checkValue(node, value, path, violations) {
   }
 }
 
-/** stub ctx + stub workflows.start；value 为脚本返回值。 */
+/** stub host tools + Agent-scoped workflowEngine.start；value 为脚本返回值。 */
 function stubContext(value) {
   const defs = []
   const requests = []
   const ctx = {
     tools: { register: (def) => defs.push(def) },
-    workflows: {
+  }
+  const workflowEngine = {
       start: (request) => {
         requests.push(request)
         return {
@@ -486,9 +487,12 @@ function stubContext(value) {
           id: 'run-1',
         }
       },
-    },
   }
-  return { ctx, defs, requests }
+  const agent = {
+    id: 'parent',
+    ctx: { get: name => name === 'workflowEngine' ? workflowEngine : undefined },
+  }
+  return { ctx, agent, defs, requests }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -502,7 +506,7 @@ test('④ 工具注册与输出 schema 编译通过', async () => {
   const def = defs[0]
   assert.strictEqual(def.name, 'deep_research')
   assert.strictEqual(mod.name, 'dsh-deep-research')
-  assert.deepEqual(plain(mod.inject), ['tools', 'workflows'], 'inject 声明 tools + workflows')
+  assert.deepEqual(plain(mod.inject), ['tools'], 'host 层只依赖 tools')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.output.schema), 'output.schema 应在引擎受支持子集内')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.parameters), 'parameters 应编译为受支持的对象 schema')
   const valid = { ok: true, report: '# r', review: '审阅' }
@@ -513,16 +517,21 @@ test('④ 工具注册与输出 schema 编译通过', async () => {
 // ════════════════════════════════════════════════════════════════════════════
 // ⑤ 参数校验与请求透传
 // ════════════════════════════════════════════════════════════════════════════
-test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start', async () => {
+test('⑤ 参数校验：调用 Agent 作用域路由与请求透传', async () => {
   const { mod } = await loadPlugin()
-  const { ctx, defs, requests } = stubContext({ report: 'r' })
+  const { ctx, agent, defs, requests } = stubContext({ report: 'r' })
   mod.apply(ctx, {})
   const def = defs[0]
-  const exec = { agent: { id: 'parent' }, signal: new EventTarget() }
+  const exec = { agent, signal: new EventTarget() }
 
   await assert.rejects(def.execute({ topic: '   ' }, exec), /topic must not be empty/)
   await assert.rejects(def.execute({ topic: 'T', depth: 4 }, exec), /depth must be 1, 2 or 3/)
   assert.strictEqual(requests.length, 0, '校验失败时不进入 workflows.start')
+
+  await assert.rejects(def.execute({ topic: 'T' }, {
+    ...exec,
+    agent: { ...agent, ctx: { get: () => undefined } },
+  }), /Agent preset with workflowEngine/)
 
   const ok = await def.execute({ topic: 'T', depth: 1, questions: '1. Q1\n2. Q2' }, exec)
   assert.strictEqual(ok.ok, true)
@@ -544,7 +553,7 @@ test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start'
   assert.ok(!('subagentProvider' in req), '未配置时不传 subagentProvider')
 
   // 配置透传：models / maxParallel / subagentProvider
-  const { ctx: ctx2, defs: defs2, requests: requests2 } = stubContext({ report: 'r' })
+  const { ctx: ctx2, agent: agent2, defs: defs2, requests: requests2 } = stubContext({ report: 'r' })
   mod.apply(ctx2, {
     plannerModel: 'pm',
     researcherModel: 'rm',
@@ -552,7 +561,7 @@ test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start'
     subagentProvider: 'fork',
     maxTotalAgents: 7,
   })
-  await defs2[0].execute({ topic: 'T', depth: 2 }, exec)
+  await defs2[0].execute({ topic: 'T', depth: 2 }, { ...exec, agent: agent2 })
   const req2 = requests2[0]
   assert.deepEqual(plain(req2.args.models), { planner: 'pm', researcher: 'rm' }, '角色模型透传')
   assert.strictEqual(req2.args.maxParallel, 2)
@@ -561,9 +570,9 @@ test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start'
 
   // maxTotalAgents 为 null/undefined 时请求省略该键（引擎用默认上限），
   // 绝不写入 0（引擎对 <1 的 maxTotalAgents 直接 INVALID_ARGUMENT）。
-  const { ctx: nullCtx, defs: nullDefs, requests: nullReqs } = stubContext({ report: 'r' })
+  const { ctx: nullCtx, agent: nullAgent, defs: nullDefs, requests: nullReqs } = stubContext({ report: 'r' })
   mod.apply(nullCtx, { maxTotalAgents: null })
-  await nullDefs[0].execute({ topic: 'T' }, exec)
+  await nullDefs[0].execute({ topic: 'T' }, { ...exec, agent: nullAgent })
   assert.strictEqual(nullReqs.length, 1)
   assert.ok(!('maxTotalAgents' in nullReqs[0]), 'maxTotalAgents: null 不写入请求（引擎默认）')
 })

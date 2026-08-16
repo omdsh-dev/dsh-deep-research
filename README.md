@@ -1,7 +1,7 @@
 # @dsh-external/dsh-deep-research
 
 把 deep-research 流程做成 **DSH 扩展插件**（plugin，与 skill 体系分开），
-基于 **DSH 官方 workflow 引擎**（`ctx.workflows` / `@deepseek-ai/dsh-workflow-workerthread`）
+基于 **DSH 官方 workflow 引擎**（`exec.agent.ctx.workflowEngine` / `@deepseek-ai/dsh-workflow-worker-thread`）
 实现，按 **控制论 + 信息论** 设计——不是固定提示词流水线，而是**活的、自适应的研究闭环**。
 
 ## 理论 → 机制
@@ -24,8 +24,9 @@
 dsh-deep-research/
 ├── package.json    # @dsh-external/dsh-deep-research（声明 dsh.bundle.patch）
 ├── cordis.patch.yml  # bundle 补丁：按包名插入插件行
-├── src/index.ts    # cordis 插件：注册 deep_research 工具，提交官方 workflow 脚本（原生 TS，零构建）
-├── tsconfig.json   # typecheck 配置（project references 解析到 sibling deepseek-harness 源码）
+├── src/index.ts    # cordis 插件：注册 deep_research 工具，提交官方 workflow 脚本
+├── lib/types/     # 已编译 ESM 生产入口
+├── tsconfig.json  # typecheck/build 配置（解析到同级 deepseek-harness 源码）
 └── README.md
 ```
 
@@ -34,13 +35,12 @@ dsh-deep-research/
 ```bash
 pnpm install        # 仅 typescript/@types/node（typecheck 用）
 pnpm run typecheck  # tsc -b，类型从 sibling deepseek-harness checkout 解析
+pnpm run build      # 生成 lib/types 生产入口
 ```
 
-源码即运行时：包入口直接指向 `src/index.ts`，无构建步骤。profile 安装的副本位于
-node_modules 下，由 dsh 源码启动器的 tsx hook 加载（Node 原生类型剥离拒绝
-node_modules 内的文件）；源码 checkout 在 node_modules 外直跑时也可用 Node ≥22.18
-原生剥离。要求 erasable-only TS 语法（无 enum/命名空间等），
-`node --test`/`pnpm typecheck` 会挡住不可移植写法。
+包入口指向已编译的 `lib/types/index.js`。源码保持 erasable-only TS 语法，
+使零依赖回归测试也能用 Node 原生类型剥离执行；`node --test` 和
+`pnpm run typecheck` 会挡住不可移植写法。
 
 ## 安装与使用方式
 
@@ -68,8 +68,8 @@ dsh --profile <profile>        # 重启生效：工具 deep_research 随 profile
 **成本建议**：模型分层——规划/综合用强模型、研究用便宜模型（配置
 `plannerModel`/`researcherModel`/`synthesizerModel`/`reviewerModel`），可显著降本。
 
-**依赖要求**：profile 的组合必须包含官方 workflow 引擎与内置 web 工具——`dsh` 官方
-base 组合自带，无需额外安装；peer 依赖（`@deepseek-ai/dsh-tools` 等）由组合提供，
+**依赖要求**：调用该工具的 Agent preset 必须包含官方 workflow 引擎与内置 web 工具。
+DSH 的 standard/code preset 自带，无需额外安装；peer 依赖（`@deepseek-ai/dsh-tools` 等）由组合提供，
 profile 的 `autoInstallPeers: false` 可避免向 registry 查找未发布的 `@deepseek-ai/*`。
 
 **更新 / 卸载**：
@@ -116,8 +116,7 @@ dsh plugin --profile <profile> remove @dsh-external/dsh-deep-research
 
 ## Profile 兼容性
 
-本插件运行时依赖 DSH 官方 workflow 引擎（`ctx.workflows`，peer：`@deepseek-ai/dsh-workflow`）。
-请把它安装进**提供 workflows provider 的 Profile**（如 tui/headless 组合）；若 Profile 未声明
-该 provider（如部分 Web Profile 组合），Loader 会保持 pending——此时请先在 DSH Hub 登记
-workflows provider 关系或改用提供该服务的组合。编译产物（`lib/types/index.js`）为官方
-0810 生产入口，Node 原生可加载。
+插件在 host 层只注册工具，执行时从 `exec.agent.ctx.workflowEngine` 解析调用 Agent
+所属 preset 的引擎。因此它同时支持 Web 的每-preset 隔离组合和 headless 组合，不会在
+Web host 层额外挂载第二个 workflow engine。若 minimal/custom preset 不含 `workflowEngine`，
+调用时会直接报出所缺能力。
