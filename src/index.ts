@@ -3,7 +3,7 @@
  *
  * A REAL plugin (not a skill): registers one model-facing tool, `deep_research`,
  * that runs the user's deep-research workflow ON TOP OF DSH'S OFFICIAL WORKFLOW
- * ENGINE (`ctx.workflows`, `@deepseek-ai/dsh-workflow-workerthread`) — no custom
+ * ENGINE (`exec.agent.ctx.workflowEngine`, `@deepseek-ai/dsh-workflow-worker-thread`) — no custom
  * subagent plumbing, no TUI surface, no prompt injection.
  *
  * The pipeline is a LIVE ADAPTIVE LOOP designed from cybernetics + information
@@ -49,25 +49,22 @@
  * the parent route. The plugin never fetches the web: search/fetch stays on
  * DSH's built-in `web_search` / `web_fetch`, which children inherit.
  *
- * Native TypeScript source: the package entry points at this file and no build
- * step exists. In a dsh profile the package lives under node_modules, so it
- * loads through the dsh source launcher's whole-process tsx hook (Node's
- * native type stripping refuses files under node_modules); a checkout run
- * outside node_modules can also load via Node >=22.18 native stripping.
- * Syntax must stay erasable-only (no enums/namespaces/parameter properties).
+ * TypeScript compiles to the package's `lib/types/index.js` production entry.
+ * The source remains erasable-only so the dependency-free regression test can
+ * also strip and evaluate it with Node's native TypeScript support.
  *
  * @module @dsh-external/dsh-deep-research
  */
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { Context } from 'cordis'
-// Type-only: brings the `ctx.workflows` Context augmentation into this program.
+import type { Context } from '@deepseek-ai/cordis'
+// Type-only: brings the `ctx.workflowEngine` Context augmentation into this program.
 import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'
 
 export const name = 'dsh-deep-research'
 
-/** Activate once the tool registry and the official workflow service are available. */
-export const inject = ['tools', 'workflows']
+/** Activate once the tool registry is available; each calling Agent supplies its scoped workflow engine. */
+export const inject = ['tools']
 
 /** Plugin config (all optional). */
 export interface Config {
@@ -460,6 +457,10 @@ export function apply(ctx: Context, config: Config = {}) {
       if (!parent) {
         throw new Error('deep_research requires a calling agent (exec.agent was undefined)')
       }
+      const workflowEngine = parent.ctx.get('workflowEngine')
+      if (!workflowEngine) {
+        throw new Error('deep_research requires an Agent preset with workflowEngine')
+      }
 
       const topic = String(args.topic).trim()
       if (topic.length === 0) throw new Error('deep_research: topic must not be empty')
@@ -480,7 +481,7 @@ export function apply(ctx: Context, config: Config = {}) {
       if (synthesizerModel !== undefined) models.synthesizer = synthesizerModel
       if (reviewerModel !== undefined) models.reviewer = reviewerModel
 
-      const run = ctx.workflows.start({
+      const run = workflowEngine.start({
         script: SCRIPT,
         meta: {
           name: 'deep-research',
