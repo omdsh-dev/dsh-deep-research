@@ -546,7 +546,7 @@ function parseQuestionList(raw: string | undefined): Array<{ question: string; k
     .split('\n')
     .map(line => line.replace(/^\s*(?:\d+[.、)])?\s*/, '').trim())
     .filter(line => line.length > 0)
-    .map(question => ({ question, keywords: undefined }))
+    .map(question => ({ question }))
 }
 
 function positiveInt(value: unknown, fallback: number, label: string): number {
