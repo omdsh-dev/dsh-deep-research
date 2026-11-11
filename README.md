@@ -1,8 +1,22 @@
 # @dsh-external/dsh-deep-research
 
 把 deep-research 流程做成 **DSH 扩展插件**（plugin，与 skill 体系分开），
-基于 **DSH 官方 workflow 引擎**（`ctx.workflows` / `@deepseek-ai/dsh-workflow-workerthread`）
-实现，按 **控制论 + 信息论** 设计——不是固定提示词流水线，而是**活的、自适应的研究闭环**。
+基于 **DSH 官方 workflow 引擎**（`ctx.workflowEngine`，dsh >= 0.2.2-rc.1 由
+`@deepseek-ai/dsh-workflow-ptc` 提供）实现，按 **控制论 + 信息论** 设计——不是固定提示词流水线，而是**活的、自适应的研究闭环**。
+
+## dsh 0.2.2-rc.1 兼容性
+
+在 dsh 0.2.2-rc.1 上需要四处适配（本 PR 内容）：
+
+1. workflow 服务名 `workflows` → `workflowEngine`（旧名在 0.2.2-rc.1 不存在，inject 永远 pending）；
+2. peerDependencies 对齐 `^0.2.2-rc.1`（`^0.0.1` 会被宿主启动期版本兼容门直接 skip）；
+3. `questions` 绑定值不得携带 `keywords: undefined`——workflow 引擎要求绑定值是无损 JSON，
+   含 `undefined` 属性的对象会被拒绝（真实运行报错：`workflow binding value must be lossless JSON`）；
+4. cordis.patch.yml 增加 id 定向覆盖重新启用 `workflow-ptc`：web profile 的 web-app bundle 层把
+   全局 workflow-ptc 禁用为 preset 级，不禁用则插件激活不了。
+
+注意：若与其它注册 `deep_research` 工具的插件（如 houdinicc/dsh-deep-research）共存，宿主工具
+注册表拒绝重名，需把本插件工具改名为 `deep_research_workflow` 之类——非本 PR 范围，按需自行处理。
 
 ## 理论 → 机制
 

@@ -3,7 +3,7 @@
  *
  * A REAL plugin (not a skill): registers one model-facing tool, `deep_research`,
  * that runs the user's deep-research workflow ON TOP OF DSH'S OFFICIAL WORKFLOW
- * ENGINE (`ctx.workflows`, `@deepseek-ai/dsh-workflow-workerthread`) — no custom
+ * ENGINE (`ctx.workflowEngine`, dsh >= 0.2.2-rc.1 由 `@deepseek-ai/dsh-workflow-ptc` 提供) — no custom
  * subagent plumbing, no TUI surface, no prompt injection.
  *
  * The pipeline is a LIVE ADAPTIVE LOOP designed from cybernetics + information
@@ -61,13 +61,13 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Context } from 'cordis'
-// Type-only: brings the `ctx.workflows` Context augmentation into this program.
+// Type-only: brings the workflow Context augmentation into this program.
 import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'
 
 export const name = 'dsh-deep-research'
 
 /** Activate once the tool registry and the official workflow service are available. */
-export const inject = ['tools', 'workflows']
+export const inject = ['tools', 'workflowEngine']
 
 /** Plugin config (all optional). */
 export interface Config {
@@ -480,7 +480,7 @@ export function apply(ctx: Context, config: Config = {}) {
       if (synthesizerModel !== undefined) models.synthesizer = synthesizerModel
       if (reviewerModel !== undefined) models.reviewer = reviewerModel
 
-      const run = ctx.workflows.start({
+      const run = ctx.workflowEngine.start({
         script: SCRIPT,
         meta: {
           name: 'deep-research',
@@ -546,7 +546,7 @@ function parseQuestionList(raw: string | undefined): Array<{ question: string; k
     .split('\n')
     .map(line => line.replace(/^\s*(?:\d+[.、)])?\s*/, '').trim())
     .filter(line => line.length > 0)
-    .map(question => ({ question, keywords: undefined }))
+    .map(question => ({ question }))
 }
 
 function positiveInt(value: unknown, fallback: number, label: string): number {

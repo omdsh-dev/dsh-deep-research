@@ -2,7 +2,19 @@
 # manifest field): inserts the deep_research orchestrator row into any profile
 # that lists @dsh-external/dsh-deep-research in its `dsh.profile.bundles`.
 # The row loads the plugin by package name from the profile's node_modules.
+#
+# dsh 0.2.2-rc.1 web profile 兼容：web-app bundle 层把 workflow-ptc（workflowEngine
+# 服务的宿主实现）禁用为 preset 级（delegation 组内 isolate），全局没有 workflowEngine，
+# 本插件的 inject ['tools','workflowEngine'] 会永远 pending。这里在 bundle patch 层用
+# id 定向覆盖重新启用（晚于 web-app 层生效）；引擎为全局单例，run 仍绑定发起会话
+# （parent），行为与 delegation 组内一致。非 web profile（如 tui）该行本就启用，
+# 此覆盖无副作用。
 
 - insert:
     - id: dsh-deep-research
       name: '@dsh-external/dsh-deep-research'
+
+- id: workflow-ptc
+  disabled: false
+  config:
+    provider: spawn
