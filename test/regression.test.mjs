@@ -476,7 +476,7 @@ function stubContext(value) {
   const requests = []
   const ctx = {
     tools: { register: (def) => defs.push(def) },
-    workflows: {
+    workflowEngine: {
       start: (request) => {
         requests.push(request)
         return {
@@ -502,7 +502,7 @@ test('④ 工具注册与输出 schema 编译通过', async () => {
   const def = defs[0]
   assert.strictEqual(def.name, 'deep_research')
   assert.strictEqual(mod.name, 'dsh-deep-research')
-  assert.deepEqual(plain(mod.inject), ['tools', 'workflows'], 'inject 声明 tools + workflows')
+  assert.deepEqual(plain(mod.inject), ['tools', 'workflowEngine'], 'inject 声明 tools + workflowEngine')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.output.schema), 'output.schema 应在引擎受支持子集内')
   assert.doesNotThrow(() => assertSupportedJsonSchema(def.parameters), 'parameters 应编译为受支持的对象 schema')
   const valid = { ok: true, report: '# r', review: '审阅' }
@@ -513,7 +513,7 @@ test('④ 工具注册与输出 schema 编译通过', async () => {
 // ════════════════════════════════════════════════════════════════════════════
 // ⑤ 参数校验与请求透传
 // ════════════════════════════════════════════════════════════════════════════
-test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start', async () => {
+test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflowEngine.start', async () => {
   const { mod } = await loadPlugin()
   const { ctx, defs, requests } = stubContext({ report: 'r' })
   mod.apply(ctx, {})
@@ -522,7 +522,7 @@ test('⑤ 参数校验：空 topic / depth>3 抛错，不进入 workflows.start'
 
   await assert.rejects(def.execute({ topic: '   ' }, exec), /topic must not be empty/)
   await assert.rejects(def.execute({ topic: 'T', depth: 4 }, exec), /depth must be 1, 2 or 3/)
-  assert.strictEqual(requests.length, 0, '校验失败时不进入 workflows.start')
+  assert.strictEqual(requests.length, 0, '校验失败时不进入 workflowEngine.start')
 
   const ok = await def.execute({ topic: 'T', depth: 1, questions: '1. Q1\n2. Q2' }, exec)
   assert.strictEqual(ok.ok, true)

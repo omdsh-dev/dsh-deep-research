@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-deep-research",
   "description": "Deep Research orchestrator extension for DeepSeek Harness: an adaptive cybernetics/information-theory deep_research tool on the official workflow engine, reusing built-in web_search/web_fetch.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "./lib/types/index.js",
@@ -30,8 +30,8 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "^0.0.1",
-    "@deepseek-ai/dsh-workflow": "^0.0.1",
+    "@deepseek-ai/dsh-tools": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-workflow": "^0.2.2-rc.1",
     "cordis": "^4.0.0-rc.7"
   },
   "devDependencies": {
